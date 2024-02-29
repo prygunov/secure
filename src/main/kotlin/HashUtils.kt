@@ -1,5 +1,4 @@
 object HashUtils {
-
     fun bytesToHex(hash: ByteArray): String {
         val hexString = StringBuilder(2 * hash.size)
         for (i in hash.indices) {
@@ -11,5 +10,4 @@ object HashUtils {
         }
         return hexString.toString()
     }
-
 }

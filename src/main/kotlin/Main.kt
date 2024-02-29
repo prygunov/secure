@@ -10,14 +10,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-@Composable
 @Preview
+@Composable
 fun App() {
-    var sourceText by remember { mutableStateOf("password to hash") }
-    var iterations by remember { mutableStateOf(10000000) }
+    val coroutineScope = rememberCoroutineScope()
+    val pattern = remember { Regex("^\\d+\$") }
+    var sourceText by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf("") }
+    var iterations by remember { mutableStateOf(1000000000) }
     var currentIteration by remember { mutableStateOf(1) }
     val emptyByteArr = "".toByteArray()
 
@@ -36,25 +39,37 @@ fun App() {
     }
 
     fun decodeHash(hash: ByteArray, algorithm: HashAlgorithm) {
-        //GlobalScope().launch {  }
+        if (sourceText.isBlank())
+            return
+
         var found = false
+        message = "Вычисление $hash, ожидайте..."
+
+        val beforeMs = System.currentTimeMillis()
+
         for (i in 1..iterations) {
             val assumedPassword = i.toString()
             val assumedHash = algorithm.calculateHash(assumedPassword.toByteArray())
             currentIteration = i
             if (assumedHash.contentEquals(hash)) {
-                println("Password is $i")
                 found = true
             }
+            if (found)
+                break
         }
+
+        val afterMs = System.currentTimeMillis()
+        val diff = afterMs - beforeMs
+        message = "Вычислен $algorithm, данные: $currentIteration, заняло времени $diff мс."
+
         if (!found) {
-            println("Password not found")
+            message = "Данные не найдены в заданном диапазоне"
         }
     }
 
     MaterialTheme {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -65,38 +80,46 @@ fun App() {
                     modifier = Modifier.fillMaxWidth(),
                     value = sourceText,
                     onValueChange = {
-                        calculateStringHash(it)
-                        sourceText = it
-                                    },
+                        if (it.isEmpty() || it.matches(pattern)) {
+                            calculateStringHash(it)
+                            sourceText = it
+                        }
+                    },
                     label = { Text("Данные для хэширвоания") }
                 )
             }
 
             for (algorithm in HashAlgorithm.values()) {
-                Row (
-                    modifier = Modifier.fillMaxWidth(),
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(3.dp),
                 ) {
                     TextField(
+                        maxLines = 10,
                         value = HashUtils.bytesToHex(hashes[algorithm] ?: emptyByteArr),
                         enabled = false,
                         onValueChange = {},
                         label = { Text("${algorithm.name} (${algorithm.bits} bits)") }
                     )
-                    Button(onClick = {
-                        decodeHash(hashes[algorithm]?: emptyByteArr, algorithm)
-                    }) {
+                    Button(
+                        modifier = Modifier.requiredSize(width = 150.dp, height = 50.dp),
+                        onClick = {
+                            coroutineScope.launch {
+                                decodeHash(hashes[algorithm] ?: emptyByteArr, algorithm)
+                            }
+                        }) {
                         Text("Вскрыть $algorithm")
                     }
                 }
             }
-            Text("Итераций: $iterations, текущая: $currentIteration()")
+            Text("Интервал перебора до: $iterations, текущая итерация: $currentIteration")
+            Text(message)
         }
     }
 }
 
 
 fun main() = application {
-    Window(onCloseRequest = ::exitApplication) {
+    Window(title = "Lab 1", onCloseRequest = ::exitApplication) {
         App()
     }
 }

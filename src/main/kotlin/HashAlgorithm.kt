@@ -1,7 +1,6 @@
 
 import java.security.MessageDigest
 
-
 enum class HashAlgorithm(val bits: Int) {
     MD5(128),
     SHA1(160),
@@ -9,11 +8,6 @@ enum class HashAlgorithm(val bits: Int) {
     SHA512(512);
 
     fun calculateHash(arr: ByteArray): ByteArray{
-        val digest = MessageDigest.getInstance(this.name)
-        return digest.digest(arr)
-    }
-
-    fun decodeHash(arr: ByteArray): ByteArray{
         val digest = MessageDigest.getInstance(this.name)
         return digest.digest(arr)
     }
