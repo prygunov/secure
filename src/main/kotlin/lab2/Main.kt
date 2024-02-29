@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.singleWindowApplication
 import java.io.*
+import java.lang.Math.random
 import java.math.BigInteger
 import java.security.spec.AlgorithmParameterSpec
 import javax.crypto.Cipher
@@ -24,20 +25,28 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.IvParameterSpec
 
 
+private val HEX_ARRAY = "0123456789ABCDEF".toCharArray()
+fun bytesToHex(bytes: ByteArray): String {
+    val hexChars = CharArray(bytes.size * 2)
+    for (j in bytes.indices) {
+        val v = bytes[j].toInt() and 0xFF
+        hexChars[j * 2] = HEX_ARRAY[v ushr 4]
+        hexChars[j * 2 + 1] = HEX_ARRAY[v and 0x0F]
+    }
+    return String(hexChars)
+}
+
 @Throws(IOException::class)
 private fun encryption(input: InputStream, output: OutputStream, encrypt: Cipher) {
     var output: OutputStream? = output
     output = CipherOutputStream(output, encrypt)
-    //calling the writeBytes() method to write the encrypted bytes to the file
     writeBytes(input, output)
 }
 
-//method for decryption
 @Throws(IOException::class)
 private fun decryption(input: InputStream, output: OutputStream, decrypt: Cipher) {
     var input: InputStream? = input
     input = CipherInputStream(input, decrypt)
-    //calling the writeBytes() method to write the decrypted bytes to the file
     writeBytes(input, output)
 }
 
@@ -122,15 +131,18 @@ fun DropdownList(itemList: List<String>, selectedIndex: Int, modifier: Modifier,
 
 }
 
-fun performDesEncryption(initialization_vector: String, text: String, keyMap: Map<Int, String>, mode: String): String {
+fun performDesEncryption(initialization_vector: String, text: String, keyMap: Map<Int, String>, mode: String, paddingMode: String): String {
     // Примерная реализация, в реальности здесь должно быть шифрование
     val keyBinaryString = keyMap.toList().sortedBy { it.first }.joinToString("") { it.second }
     var b = BigInteger(keyBinaryString, 2).toByteArray().asList().toMutableList()
     // Предполагается, что вы переведете keyBinaryString в ключ формата DES и выполните шифрование
-    for (i in 0 until 8) {
-        if (i >= b.size) {
+
+    var i = 0
+    while (i != 8){
+        if (i > b.size) {
             b.add(i, 0.toByte())
         }
+        i++
     }
 
     val scrtkey = object : SecretKey {
@@ -142,29 +154,31 @@ fun performDesEncryption(initialization_vector: String, text: String, keyMap: Ma
     }
 
     val aps: AlgorithmParameterSpec = IvParameterSpec(initialization_vector.toByteArray())
-    val encrypt = Cipher.getInstance("DES/$mode/PKCS5Padding")
+    val encrypt = Cipher.getInstance("DES/$mode/$paddingMode")
     encrypt.init(Cipher.ENCRYPT_MODE, scrtkey, aps)
     val a = ByteArrayOutputStream()
 
     encryption(ByteArrayInputStream(text.toByteArray()), a, encrypt)
 
-    return "Encrypted text: $text with key: $keyBinaryString looks like $a"
+    return "Encrypted text: $text with key: ${bytesToHex(b.toByteArray())} \n looks like ${bytesToHex(a.toByteArray())}"
 }
 
 fun main() = singleWindowApplication {
     // Состояние для ввода ключа и текста
-    val keyState = remember { mutableStateOf(mutableMapOf<Int, String>()) }
+    val keyState = remember {
+        mutableStateOf(mutableMapOf<Int, String>()).apply {
+            for (i in 0..63) {
+                this.value.put(i, Math.round(random()).toString())
+            }
+        }
+    }
     val textState = remember { mutableStateOf("text") }
     val initializationVectorState = remember { mutableStateOf("20202020") }
     val encryptedTextState = remember { mutableStateOf("") }
     val itemList = listOf("CBC", "CFB", "OFB")
     var selectedIndex by rememberSaveable { mutableStateOf(0) }
-    var buttonModifier = Modifier.width(100.dp)
 
 
-    for (i in 0..63) {
-        keyState.value = keyState.value.toMutableMap().apply { this[i] = "0" }
-    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         // Грид для ввода ключа (64 бита для DES)
@@ -227,7 +241,7 @@ fun main() = singleWindowApplication {
             DropdownList(
                 itemList = itemList,
                 selectedIndex = selectedIndex,
-                modifier = buttonModifier,
+                modifier =  Modifier.width(100.dp),
                 onItemClick = { selectedIndex = it })
             Button(
                 onClick = {
@@ -236,7 +250,8 @@ fun main() = singleWindowApplication {
                         initializationVectorState.value,
                         textState.value,
                         keyState.value,
-                        itemList[selectedIndex]
+                        itemList[selectedIndex],
+                        "PKCS5Padding"
                     )
                 },
                 modifier = Modifier.padding(top = 16.dp)
